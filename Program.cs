@@ -105,6 +105,28 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+var healthEndpoint = async Task<IResult> (ApplicationDbContext dbContext) =>
+{
+    var databaseOnline = await dbContext.Database.CanConnectAsync();
+    var payload = new HealthResponse(
+        databaseOnline ? "healthy" : "degraded",
+        "BookShelf.Api",
+        DateTime.UtcNow,
+        new HealthChecks(
+            new HealthCheckResult("healthy"),
+            new HealthCheckResult(databaseOnline ? "healthy" : "unreachable")
+        )
+    );
+
+    return Results.Json(
+        payload,
+        statusCode: databaseOnline ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable
+    );
+};
+
+app.MapGet("/health", healthEndpoint);
+app.MapGet("/api/health", healthEndpoint);
+
 app.UseHttpsRedirection();
 app.UseCors("Frontend");
 app.UseStaticFiles();
@@ -121,3 +143,17 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+internal sealed record HealthResponse(
+    string Status,
+    string Service,
+    DateTime TimestampUtc,
+    HealthChecks Checks
+);
+
+internal sealed record HealthChecks(
+    HealthCheckResult Api,
+    HealthCheckResult Database
+);
+
+internal sealed record HealthCheckResult(string Status);
