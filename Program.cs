@@ -83,7 +83,15 @@ if (!string.IsNullOrWhiteSpace(facebookAppId) && !string.IsNullOrWhiteSpace(face
     });
 }
 
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+var frontendBaseUrl = builder.Configuration["Frontend:BaseUrl"];
+var allowedOrigins = configuredOrigins
+    .Append(frontendBaseUrl)
+    .Where(origin => !string.IsNullOrWhiteSpace(origin))
+    .Select(origin => origin!.TrimEnd('/'))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
