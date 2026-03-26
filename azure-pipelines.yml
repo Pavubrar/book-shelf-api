@@ -80,6 +80,7 @@ stages:
       displayName: 'Publish project ( single zip)'
       inputs:
         command: 'publish'
+        projects: 'BookShelf.Api.csproj'
         publishWebProjects: false
         arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/publish'
         zipAfterPublish: false
