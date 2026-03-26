@@ -11,6 +11,8 @@ pool:
 
 variables:
   buildConfiguration: 'Release'
+  projectFile: './BookShelf.Api.csproj'
+  artifactName: 'drop'
   azureSubscription: 'ME-MngEnvMCAP517100-v-parvkaur-1 (f1c89731-86b0-4cd4-bd2d-f2347c1d62d2)'
   appName: 'book-api'
   resourceGroupName: 'DevOps'
@@ -64,14 +66,14 @@ stages:
       displayName: 'Restore packages'
       inputs:
         command: 'restore'
-        projects: 'BookShelf.Api.csproj'
+        projects: '$(projectFile)'
 
     # Build
     - task: DotNetCoreCLI@2
       displayName: 'Build project'
       inputs:
         command: 'build'
-        projects: 'BookShelf.Api.csproj'  
+        projects: '$(projectFile)'  
         arguments: '--configuration $(buildConfiguration)'
 
     # Publish (ZIP)
@@ -80,10 +82,19 @@ stages:
       displayName: 'Publish project ( single zip)'
       inputs:
         command: 'publish'
-        projects: 'BookShelf.Api.csproj'
+        projects: '$(projectFile)'
         publishWebProjects: false
         arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/publish'
         zipAfterPublish: false
+
+    - script: |
+        set -e
+        echo "===== DEBUG: publish output ====="
+        ls -la "$(Build.ArtifactStagingDirectory)/publish"
+        test -f "$(Build.ArtifactStagingDirectory)/publish/BookShelf.Api.dll"
+        test -f "$(Build.ArtifactStagingDirectory)/publish/BookShelf.Api.runtimeconfig.json"
+        test -f "$(Build.ArtifactStagingDirectory)/publish/BookShelf.Api.deps.json"
+      displayName: 'DEBUG: verify published API files'
 
     
 # Archive publish folder -> app.zip
