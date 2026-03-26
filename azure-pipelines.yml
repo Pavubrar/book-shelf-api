@@ -273,7 +273,7 @@ stages:
     steps:
     - script: |
         set -e
-        HEALTH_URL="https://book-api-bxazhse2f4e2hvbj.canadacentral-01.azurewebsites.net/health"
+        HEALTH_URL="https://book-api-staging-bgfda3bxcfgsbpdx.canadacentral-01.azurewebsites.net/health"
         MAX_RETRIES=12
         WAIT_SECONDS=10
 
