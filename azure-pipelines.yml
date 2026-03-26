@@ -9,22 +9,387 @@ trigger:
 pool:
   vmImage: ubuntu-latest
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+variables:
+  buildConfiguration: 'Release'
+  azureSubscription: 'ME-MngEnvMCAP517100-v-parvkaur-1 (f1c89731-86b0-4cd4-bd2d-f2347c1d62d2)'
+  appName: 'book-api'
+  resourceGroupName: 'DevOps'
+  slotName: 'staging'          
+  runtimeStack: 'DOTNETCORE|9.0'
+  canarySlotPercent: '5'
+  canarySlotPercent2: '25'
+  stagingUrl: 'book-api-staging-bgfda3bxcfgsbpdx.canadacentral-01.azurewebsites.net'
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
 
-- task: AzureWebApp@1
-  inputs:
-      azureSubscription: 'ME-MngEnvMCAP517100-v-parvkaur-1 (f1c89731-86b0-4cd4-bd2d-f2347c1d62d2)'
-      appType: 'webAppLinux'
-      appName: 'book-api'
-      deployToSlotOrASE: true
-      resourceGroupName: 'DevOps'
-      slotName: 'staging'
-      package: '$(System.DefaultWorkingDirectory)/**/*.zip'
-      runtimeStack: 'DOTNETCORE|9.0'
+stages:
+
+# =========================
+# STAGE 1: BUILD + PUBLISH
+# =========================
+- stage: Build
+  displayName: 'Build & Package'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build Job'
+    steps:
+    # STEP 0: Force checkout
+    - checkout: self
+      clean: true
+
+    # DEBUG – locate csproj
+    - script: |
+        echo "===== DEBUG INFO ====="
+        echo "System.DefaultWorkingDirectory:"
+        echo "$(System.DefaultWorkingDirectory)"
+        echo ""
+        echo "PWD:"
+        pwd
+        echo ""
+        echo "List root:"
+        ls -la
+        echo ""
+        echo "Find csproj:"
+        find . -name "*.csproj"
+      displayName: 'DEBUG: locate csproj'
+
+    # Install .NET SDK
+    - task: UseDotNet@2
+      displayName: 'Install .NET SDK'
+      inputs:
+        packageType: 'sdk'
+        version: '9.x'
+
+    # Restore
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore packages'
+      inputs:
+        command: 'restore'
+        projects: '**/*.csproj'
+
+    # Build
+    - task: DotNetCoreCLI@2
+      displayName: 'Build project'
+      inputs:
+        command: 'build'
+        projects: '**/*.csproj'
+        arguments: '--configuration $(buildConfiguration)'
+
+    # Publish (ZIP)
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish project ( single zip)'
+      inputs:
+        command: 'publish'
+        publishWebProjects: false
+        arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/publish'
+        zipAfterPublish: false
+
+    
+# Archive publish folder -> app.zip
+    - task: ArchiveFiles@2
+      displayName: 'Archive publish folder'
+      inputs:
+       rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/publish'
+       includeRootFolder: false
+       archiveType: 'zip'
+       archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+       replaceExistingArchive: true
+
+
+    # Debug: confirm zip exists
+    - script: |
+        echo "===== DEBUG: artifact staging ====="
+        ls -la "$(Build.ArtifactStagingDirectory)"
+        echo ""
+        echo "Find ZIPs:"
+        find "$(Build.ArtifactStagingDirectory)" -maxdepth 2 -name "*.zip" -print
+      displayName: 'DEBUG: verify zip output'
+
+    # Publish artifact for next stages
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish build artifact'
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: '$(artifactName)'
+
+# =========================
+# STAGE 2: DEPLOY TO STAGING SLOT
+# =========================
+- stage: Deploy_Staging
+  displayName: 'Deploy to Staging Slot'
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - deployment: DeployStaging
+    displayName: 'Deploy ZIP to staging slot'
+    environment: 'staging'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          # Download build artifact into this stage
+          - task: DownloadBuildArtifacts@1
+            displayName: 'Download artifact'
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: '$(artifactName)'
+              downloadPath: '$(Pipeline.Workspace)/$(artifactName)'
+
+          - script: |
+              echo "===== DEBUG: pipeline workspace ====="
+              ls -R "$(Pipeline.Workspace)"
+            displayName: 'DEBUG: list downloaded artifacts'
+
+          - task: AzureWebApp@1
+            displayName: 'Deploy to staging slot'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appType: 'webAppLinux'
+              appName: '$(appName)'
+              deployToSlotOrASE: true
+              resourceGroupName: '$(resourceGroupName)'
+              slotName: '$(slotName)'
+              package: '$(Pipeline.Workspace)/$(artifactName)/app.zip'
+              runtimeStack: '$(runtimeStack)'
+              canarySlotPercent: '5'
+              canarySlotPercent2: '25'   # or '50'
+
+#==== Stage 3 for ditributing traffic to stagging slot for testing purpose for new features
+- stage: Canary_5
+  displayName: 'Canary: Route 5% traffic to staging slot'
+  dependsOn: Deploy_Staging
+  condition: succeeded()
+  jobs:
+  - job: SetTraffic5
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Set traffic split: staging=$(canarySlotPercent)%'
+      inputs:
+        azureSubscription: '$(azureSubscription)'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          echo "Routing $(canarySlotPercent)% traffic to slot $(slotName)"
+          az webapp traffic-routing set \
+            --resource-group "$(resourceGroupName)" \
+            --name "$(appName)" \
+            --distribution "$(slotName)=$(canarySlotPercent)"
+
+# ========================= second setage 4 for next 25% traffic
+
+- stage: Canary_25
+  displayName: 'Canary: Increase traffic to 25% (or 50%)'
+  dependsOn: Canary_5
+  condition: succeeded()
+  jobs:
+  - job: SetTraffic25
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Increase traffic split: staging=$(canarySlotPercent2)%'
+      inputs:
+        azureSubscription: '$(azureSubscription)'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          echo "Increasing canary to $(canarySlotPercent2)% on slot $(slotName)"
+          az webapp traffic-routing set \
+            --resource-group "$(resourceGroupName)" \
+            --name "$(appName)" \
+            --distribution "$(slotName)=$(canarySlotPercent2)"
+
+
+# resetting traffic routing
+
+- stage: Reset_Canary_Traffic
+  displayName: 'Reset Canary Traffic (0%) before swap'
+  dependsOn: Canary_25
+  condition: succeeded()
+  jobs:
+  - job: ResetTraffic
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Clear traffic routing'
+      inputs:
+        azureSubscription: '$(azureSubscription)'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          az webapp traffic-routing clear \
+            --resource-group "$(resourceGroupName)" \
+            --name "$(appName)"
+
+# STAGE 5: START SWAP WITH PREVIEW (Production gate can be applied here)
+# =========================
+- stage: Swap_With_Preview
+  displayName: 'Swap With Preview (staging -> production)'
+  dependsOn: 
+  - Reset_Canary_Traffic
+  condition: succeeded()
+  jobs:
+  - deployment: StartSwapPreview
+    displayName: 'Start Swap With Preview'
+    environment: 'production'   # Add approvals/checks on this environment in UI to require manual approval [2](https://outlook.office365.com/owa/?ItemID=AAMkAGUxNTYxZjEyLTc0M2QtNDY4ZC04YWFjLWI5ZTU4NzlmOGNiYgBGAAAAAABJa%2fRotXY2QoPK%2fQGdSbp3BwBv8w9lzFqaTKaSyqmQHUKWAAAAAAEMAABv8w9lzFqaTKaSyqmQHUKWAAHSxy9wAAA%3d&exvsurl=1&viewmodel=ReadMessageItem)
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureAppServiceManage@0
+            displayName: 'Start Swap With Preview'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              Action: 'Start Swap With Preview'
+              WebAppName: '$(appName)'
+              ResourceGroupName: '$(resourceGroupName)'
+              SourceSlot: '$(slotName)'
+              SwapWithProduction: true
+              PreserveVnet: false
+
+# =========================
+# STAGE 6: Addding health check for before swapping
+
+# =========================
+# STAGE 7: VALIDATE HEALTH AFTER SWAP WITH PREVIEW
+# =========================
+- stage: Validate_Health
+  displayName: 'Validate Health Before Completing Swap'
+  dependsOn: Swap_With_Preview
+  condition: succeeded()
+  jobs:
+  - job: HealthCheck
+    displayName: 'Health check on PRODUCTION slot (preview)'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - script: |
+        set -e
+        HEALTH_URL="https://book-api-bxazhse2f4e2hvbj.canadacentral-01.azurewebsites.net"
+        MAX_RETRIES=12
+        WAIT_SECONDS=10
+
+        echo "Validating PRODUCTION health after Swap With Preview"
+        echo "Health URL: $HEALTH_URL"
+
+        for i in $(seq 1 $MAX_RETRIES); do
+          STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo 000)
+          echo "Attempt $i/$MAX_RETRIES → HTTP $STATUS"
+
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+            echo "✅ Health check PASSED"
+            exit 0
+          fi
+
+          echo "App warming up... waiting $WAIT_SECONDS seconds"
+          sleep $WAIT_SECONDS
+        done
+
+        echo "❌ Health check FAILED after retries"
+        exit 1
+      displayName: 'Health check (warm-up retries)'
+
+#=== STAGE 8: Auto-rollback before complete swap
+
+- stage: Rollback_Preview
+  displayName: 'AUTO-ROLLBACK: Cancel Swap + Reset traffic'
+  dependsOn:
+  - Swap_With_Preview
+  - Validate_Health
+  condition: failed('Validate_Health')
+  jobs:
+  - job: CancelAndReset
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: AzureAppServiceManage@0
+      displayName: 'Cancel Swap (preview)'
+      inputs:
+        azureSubscription: '$(azureSubscription)'
+        Action: 'Cancel Swap'
+        WebAppName: '$(appName)'
+        ResourceGroupName: '$(resourceGroupName)'
+        Slot: '$(slotName)'
+    - task: AzureCLI@2
+      displayName: 'Reset traffic routing to 0% (back to prod)'
+      inputs:
+        azureSubscription: '$(azureSubscription)'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          echo "Resetting routing: staging=0"
+          az webapp traffic-routing clear \
+            --resource-group "$(resourceGroupName)" \
+            --name "$(appName)"
+
+
+# ========================= STAGE 9: Auto-rollback afer complete swap
+
+- stage: Rollback_AfterSwap
+  displayName: 'AUTO-ROLLBACK: Swap back + Clear traffic routing'
+  dependsOn:
+  - Complete_Swap
+  # - AI_Gate_PostSwap  (your post-swap failure-rate gate)
+  condition: failed()   # ideally failed('AI_Gate_PostSwap')
+  jobs:
+  - job: SwapBack
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: AzureAppServiceManage@0
+      displayName: 'Swap back (staging -> production)'
+      inputs:
+        azureSubscription: '$(azureSubscription)'
+        Action: 'Swap Slots'
+        WebAppName: '$(appName)'
+        ResourceGroupName: '$(resourceGroupName)'
+        SourceSlot: '$(slotName)'
+        SwapWithProduction: true
+        PreserveVnet: false
+    - task: AzureCLI@2
+      displayName: 'Clear traffic routing'
+      inputs:
+        azureSubscription: '$(azureSubscription)'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          az webapp traffic-routing clear \
+            --resource-group "$(resourceGroupName)" \
+            --name "$(appName)"
+
+
+# STAGE 10: COMPLETE SWAP
+# =========================
+- stage: Complete_Swap
+  displayName: 'Complete Swap (go live)' 
+  dependsOn: Validate_Health
+  condition: succeeded()
+
+  jobs:
+  - deployment: CompleteSwap
+    displayName: 'Complete Swap'
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureAppServiceManage@0
+            displayName: 'Complete Swap'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              Action: 'Complete Swap'
+              WebAppName: '$(appName)'
+              ResourceGroupName: '$(resourceGroupName)'
+              SourceSlot: '$(slotName)'
+              SwapWithProduction: true
+              PreserveVnet: false
+
