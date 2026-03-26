@@ -71,7 +71,7 @@ stages:
       displayName: 'Build project'
       inputs:
         command: 'build'
-        projects: '**/*.csproj'
+        projects: 'src/BookApi/BookApi.csproj'   
         arguments: '--configuration $(buildConfiguration)'
 
     # Publish (ZIP)
