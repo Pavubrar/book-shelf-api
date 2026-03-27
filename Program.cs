@@ -83,10 +83,18 @@ if (!string.IsNullOrWhiteSpace(facebookAppId) && !string.IsNullOrWhiteSpace(face
     });
 }
 
+static IEnumerable<string> SplitOrigins(params string?[] values) =>
+    values
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .SelectMany(value => value!.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
 var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+var configuredOriginsCsv = builder.Configuration["Cors:AllowedOriginsCsv"];
+var configuredOriginsValue = builder.Configuration["Cors:AllowedOrigins"];
 var frontendBaseUrl = builder.Configuration["Frontend:BaseUrl"];
 var allowedOrigins = configuredOrigins
-    .Append(frontendBaseUrl)
+    .Concat(SplitOrigins(configuredOriginsCsv, configuredOriginsValue))
+    .Concat(SplitOrigins(frontendBaseUrl))
     .Where(origin => !string.IsNullOrWhiteSpace(origin))
     .Select(origin => origin!.TrimEnd('/'))
     .Distinct(StringComparer.OrdinalIgnoreCase)
