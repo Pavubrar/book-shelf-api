@@ -21,6 +21,9 @@ variables:
   canarySlotPercent: '5'
   canarySlotPercent2: '25'
   stagingUrl: 'book-api-staging-bgfda3bxcfgsbpdx.canadacentral-01.azurewebsites.net'
+  frontendBaseUrl: 'https://bookui-dzamgjbcd4a6dzbk.canadacentral-01.azurewebsites.net'
+  frontendCallbackPath: '/auth/external-callback'
+  corsAllowedOriginsCsv: 'https://bookui-dzamgjbcd4a6dzbk.canadacentral-01.azurewebsites.net,http://localhost:5173,http://127.0.0.1:5173'
 
 
 stages:
@@ -166,6 +169,32 @@ stages:
               runtimeStack: '$(runtimeStack)'
               canarySlotPercent: '5'
               canarySlotPercent2: '25'   # or '50'
+
+          - task: AzureAppServiceSettings@1
+            displayName: 'Apply staging app settings'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appName: '$(appName)'
+              resourceGroupName: '$(resourceGroupName)'
+              slotName: '$(slotName)'
+              appSettings: |
+                [
+                  {
+                    "name": "Frontend__BaseUrl",
+                    "value": "$(frontendBaseUrl)",
+                    "slotSetting": false
+                  },
+                  {
+                    "name": "Frontend__ExternalCallbackPath",
+                    "value": "$(frontendCallbackPath)",
+                    "slotSetting": false
+                  },
+                  {
+                    "name": "Cors__AllowedOriginsCsv",
+                    "value": "$(corsAllowedOriginsCsv)",
+                    "slotSetting": false
+                  }
+                ]
 
 #==== Stage 3 for ditributing traffic to stagging slot for testing purpose for new features
 - stage: Canary_5
