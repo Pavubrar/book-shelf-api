@@ -1,11 +1,14 @@
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using Microsoft.AspNetCore.Http;
 
 namespace BookShelf.Api.Services;
 
-public class FileStorageService(IWebHostEnvironment environment)
+public class FileStorageService(IConfiguration configuration)
 {
     private static readonly string[] PdfExtensions = [".pdf"];
     private static readonly string[] AudioExtensions = [".mp3", ".wav", ".m4a", ".aac", ".ogg"];
+    private readonly BlobContainerClient containerClient = CreateContainerClient(configuration);
 
     public Task<string> SavePdfAsync(IFormFile file, CancellationToken cancellationToken = default) =>
         SaveAsync(file, "pdfs", PdfExtensions, cancellationToken);
@@ -13,19 +16,31 @@ public class FileStorageService(IWebHostEnvironment environment)
     public Task<string> SaveAudioAsync(IFormFile file, CancellationToken cancellationToken = default) =>
         SaveAsync(file, "audios", AudioExtensions, cancellationToken);
 
-    public void Delete(string? relativePath)
+    public async Task DeleteAsync(string? blobUrl, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(relativePath))
+        if (string.IsNullOrWhiteSpace(blobUrl))
         {
             return;
         }
 
-        var trimmedPath = relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-        var absolutePath = Path.Combine(GetWebRootPath(), trimmedPath);
-        if (File.Exists(absolutePath))
+        if (!Uri.TryCreate(blobUrl, UriKind.Absolute, out var blobUri))
         {
-            File.Delete(absolutePath);
+            return;
         }
+
+        var blobName = Uri.UnescapeDataString(blobUri.AbsolutePath.TrimStart('/'));
+        var firstSlash = blobName.IndexOf('/');
+        if (firstSlash >= 0)
+        {
+            blobName = blobName[(firstSlash + 1)..];
+        }
+
+        if (string.IsNullOrWhiteSpace(blobName))
+        {
+            return;
+        }
+
+        await containerClient.DeleteBlobIfExistsAsync(blobName, DeleteSnapshotsOption.IncludeSnapshots, cancellationToken: cancellationToken);
     }
 
     private async Task<string> SaveAsync(
@@ -45,27 +60,36 @@ public class FileStorageService(IWebHostEnvironment environment)
             throw new InvalidOperationException($"Unsupported file type: {extension}");
         }
 
-        var folderPath = Path.Combine(GetWebRootPath(), "uploads", folderName);
-        Directory.CreateDirectory(folderPath);
-
         var fileName = $"{Guid.NewGuid():N}{extension}";
-        var absolutePath = Path.Combine(folderPath, fileName);
+        var blobName = $"{folderName}/{fileName}";
+        var blobClient = containerClient.GetBlobClient(blobName);
 
-        await using var stream = File.Create(absolutePath);
-        await file.CopyToAsync(stream, cancellationToken);
+        await using var stream = file.OpenReadStream();
+        await blobClient.UploadAsync(
+            stream,
+            new BlobUploadOptions
+            {
+                HttpHeaders = new BlobHttpHeaders
+                {
+                    ContentType = file.ContentType
+                }
+            },
+            cancellationToken);
 
-        return $"/uploads/{folderName}/{fileName}";
+        return blobClient.Uri.ToString();
     }
 
-    private string GetWebRootPath()
+    private static BlobContainerClient CreateContainerClient(IConfiguration configuration)
     {
-        var webRootPath = environment.WebRootPath;
-        if (string.IsNullOrWhiteSpace(webRootPath))
+        var connectionString = configuration["AzureStorage:ConnectionString"];
+        if (string.IsNullOrWhiteSpace(connectionString))
         {
-            webRootPath = Path.Combine(environment.ContentRootPath, "wwwroot");
-            Directory.CreateDirectory(webRootPath);
+            throw new InvalidOperationException("AzureStorage:ConnectionString is missing.");
         }
 
-        return webRootPath;
+        var containerName = configuration["AzureStorage:ContainerName"] ?? "uploads";
+        var client = new BlobContainerClient(connectionString, containerName);
+        client.CreateIfNotExists(PublicAccessType.Blob);
+        return client;
     }
 }

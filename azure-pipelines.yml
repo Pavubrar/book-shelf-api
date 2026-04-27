@@ -18,12 +18,16 @@ variables:
   resourceGroupName: 'DevOps'
   slotName: 'staging'          
   runtimeStack: 'DOTNETCORE|9.0'
+  keyVaultName: '<book-api-key-vault-name>'
+  sqlConnectionSecretName: '<azure-sql-connection-secret-name>'
+  storageConnectionSecretName: '<azure-storage-connection-secret-name>'
   canarySlotPercent: '5'
   canarySlotPercent2: '25'
   stagingUrl: 'book-api-staging-bgfda3bxcfgsbpdx.canadacentral-01.azurewebsites.net'
   frontendBaseUrl: 'https://bookui-dzamgjbcd4a6dzbk.canadacentral-01.azurewebsites.net'
   frontendCallbackPath: '/auth/external-callback'
   corsAllowedOriginsCsv: 'https://bookui-dzamgjbcd4a6dzbk.canadacentral-01.azurewebsites.net,http://localhost:5173,http://127.0.0.1:5173'
+  azureStorageContainerName: 'uploads'
 
 
 stages:
@@ -170,8 +174,21 @@ stages:
               canarySlotPercent: '5'
               canarySlotPercent2: '25'   # or '50'
 
+          - task: AzureCLI@2
+            displayName: 'Enable managed identity for staging slot'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+                az webapp identity assign \
+                  --resource-group "$(resourceGroupName)" \
+                  --name "$(appName)" \
+                  --slot "$(slotName)"
+
           - task: AzureAppServiceSettings@1
-            displayName: 'Apply staging app settings'
+            displayName: 'Apply staging app settings and Key Vault references'
             inputs:
               azureSubscription: '$(azureSubscription)'
               appName: '$(appName)'
@@ -185,8 +202,23 @@ stages:
                     "slotSetting": false
                   },
                   {
+                    "name": "ConnectionStrings__DefaultConnection",
+                    "value": "@Microsoft.KeyVault(VaultName=$(keyVaultName);SecretName=$(sqlConnectionSecretName))",
+                    "slotSetting": true
+                  },
+                  {
+                    "name": "AzureStorage__ConnectionString",
+                    "value": "@Microsoft.KeyVault(VaultName=$(keyVaultName);SecretName=$(storageConnectionSecretName))",
+                    "slotSetting": true
+                  },
+                  {
                     "name": "Frontend__ExternalCallbackPath",
                     "value": "$(frontendCallbackPath)",
+                    "slotSetting": false
+                  },
+                  {
+                    "name": "AzureStorage__ContainerName",
+                    "value": "$(azureStorageContainerName)",
                     "slotSetting": false
                   },
                   {

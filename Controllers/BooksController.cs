@@ -102,25 +102,25 @@ public class BooksController(
 
         if (request.RemovePdfFile)
         {
-            fileStorageService.Delete(book.PdfFilePath);
+            await fileStorageService.DeleteAsync(book.PdfFilePath, cancellationToken);
             book.PdfFilePath = null;
         }
 
         if (request.RemoveAudioFile)
         {
-            fileStorageService.Delete(book.AudioFilePath);
+            await fileStorageService.DeleteAsync(book.AudioFilePath, cancellationToken);
             book.AudioFilePath = null;
         }
 
         if (request.PdfFile is not null)
         {
-            fileStorageService.Delete(book.PdfFilePath);
+            await fileStorageService.DeleteAsync(book.PdfFilePath, cancellationToken);
             book.PdfFilePath = await fileStorageService.SavePdfAsync(request.PdfFile, cancellationToken);
         }
 
         if (request.AudioFile is not null)
         {
-            fileStorageService.Delete(book.AudioFilePath);
+            await fileStorageService.DeleteAsync(book.AudioFilePath, cancellationToken);
             book.AudioFilePath = await fileStorageService.SaveAudioAsync(request.AudioFile, cancellationToken);
         }
 
@@ -142,8 +142,8 @@ public class BooksController(
             return Forbid();
         }
 
-        fileStorageService.Delete(book.PdfFilePath);
-        fileStorageService.Delete(book.AudioFilePath);
+        await fileStorageService.DeleteAsync(book.PdfFilePath, cancellationToken);
+        await fileStorageService.DeleteAsync(book.AudioFilePath, cancellationToken);
         dbContext.Books.Remove(book);
         await dbContext.SaveChangesAsync(cancellationToken);
 
