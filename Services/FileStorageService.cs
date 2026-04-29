@@ -1,6 +1,7 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Microsoft.AspNetCore.Http;
+using Azure.Identity;
 
 namespace BookShelf.Api.Services;
 
@@ -79,17 +80,25 @@ public class FileStorageService(IConfiguration configuration)
         return blobClient.Uri.ToString();
     }
 
-    private static BlobContainerClient CreateContainerClient(IConfiguration configuration)
+   
+   private static BlobContainerClient CreateContainerClient(IConfiguration configuration)
+{
+    var accountName = configuration["AzureStorage:AccountName"];
+    if (string.IsNullOrWhiteSpace(accountName))
     {
-        var connectionString = configuration["AzureStorage:ConnectionString"];
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException("AzureStorage:ConnectionString is missing.");
-        }
-
-        var containerName = configuration["AzureStorage:ContainerName"] ?? "uploads";
-        var client = new BlobContainerClient(connectionString, containerName);
-        client.CreateIfNotExists(PublicAccessType.Blob);
-        return client;
+        throw new InvalidOperationException("AzureStorage:AccountName is missing.");
     }
+
+    var containerName = configuration["AzureStorage:ContainerName"] ?? "uploads";
+
+    var serviceClient = new BlobServiceClient(
+        new Uri($"https://{accountName}.blob.core.windows.net"),
+        new DefaultAzureCredential());
+
+    var containerClient = serviceClient.GetBlobContainerClient(containerName);
+
+    containerClient.CreateIfNotExists(PublicAccessType.Blob);
+
+    return containerClient;
+}
 }
