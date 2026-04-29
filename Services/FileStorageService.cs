@@ -97,7 +97,7 @@ public class FileStorageService(IConfiguration configuration)
 
     var containerClient = serviceClient.GetBlobContainerClient(containerName);
 
-    containerClient.CreateIfNotExists(PublicAccessType.Blob);
+    containerClient.CreateIfNotExists();
 
     return containerClient;
 }
