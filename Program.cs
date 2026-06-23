@@ -10,7 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 var builder = WebApplication.CreateBuilder(args);
 var webRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
 Directory.CreateDirectory(webRootPath);
-builder.WebHost.UseWebRoot(webRootPath);
+// builder.WebHost.UseWebRoot(webRootPath);
 
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
