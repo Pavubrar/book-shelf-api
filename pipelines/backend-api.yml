@@ -1,0 +1,31 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  buildConfiguration: 'Release'
+  projectFile: './BookShelf.Api.csproj'
+  artifactName: 'drop'
+
+stages:
+
+- stage: Build
+  displayName: 'Build & Package'
+
+  jobs:
+
+  - job: BuildJob
+
+    displayName: 'Build Job'
+
+    steps:
+
+    - template: templates/build-dotnet.yml
+
+      parameters:
+
+        projectFile: $(projectFile)
+        buildConfiguration: $(buildConfiguration)
+        artifactName: $(artifactName)

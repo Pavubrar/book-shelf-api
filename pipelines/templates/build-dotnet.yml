@@ -1,0 +1,190 @@
+parameters:
+
+- name: projectFile
+  type: string
+
+- name: buildConfiguration
+  type: string
+  default: 'Release'
+
+- name: artifactName
+  type: string
+  default: 'drop'
+
+steps:
+
+- checkout: self
+  clean: true
+
+- script: |
+    echo "===== DEBUG INFO ====="
+    echo "Working Directory:"
+    pwd
+    echo "List root:"
+    ls -la
+    echo "Find csproj:"
+    find . -name "*.csproj"
+  displayName: 'DEBUG: locate csproj'
+
+- task: UseDotNet@2
+  displayName: 'Install .NET SDK'
+  inputs:
+    packageType: 'sdk'
+    version: '9.x'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Restore packages'
+  inputs:
+    command: 'restore'
+    projects: ${{ parameters.projectFile }}
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build project'
+  inputs:
+    command: 'build'
+    projects: ${{ parameters.projectFile }}
+    arguments: '--configuration ${{ parameters.buildConfiguration }}'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Publish project'
+  inputs:
+    command: 'publish'
+    projects: ${{ parameters.projectFile }}
+    publishWebProjects: false
+    arguments: '--configuration ${{ parameters.buildConfiguration }} --output $(Build.ArtifactStagingDirectory)/publish'
+    zipAfterPublish: false
+
+- script: |
+    set -e
+    echo "===== DEBUG: publish output ====="
+    ls -la "$(Build.ArtifactStagingDirectory)/publish"
+  displayName: 'DEBUG: verify publish output'
+
+- task: ArchiveFiles@2
+  displayName: 'Archive publish folder'
+  inputs:
+    rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/publish'
+    includeRootFolder: false
+    archiveType: 'zip'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+    replaceExistingArchive: true
+
+- script: |
+    set -e
+    echo "===== DEBUG: artifact staging ====="
+    ls -la "$(Build.ArtifactStagingDirectory)"
+    find "$(Build.ArtifactStagingDirectory)" -maxdepth 2 -name "*.zip"
+  displayName: 'DEBUG: verify zip output'
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish build artifact'
+  inputs:
+    pathToPublish: '$(Build.ArtifactStagingDirectory)'
+    artifactName: ${{ parameters.artifactName }}
+
+
+
+
+
+
+
+# stages:
+
+# # =========================
+# # STAGE 1: BUILD + PUBLISH
+# # =========================
+# - stage: Build
+#   displayName: 'Build & Package'
+#   jobs:
+#   - job: BuildJob
+#     displayName: 'Build Job'
+#     steps:
+#     # STEP 0: Force checkout
+#     - checkout: self
+#       clean: true
+
+#     # DEBUG – locate csproj
+#     - script: |
+#         echo "===== DEBUG INFO ====="
+#         echo "System.DefaultWorkingDirectory:"
+#         echo "$(System.DefaultWorkingDirectory)"
+#         echo ""
+#         echo "PWD:"
+#         pwd
+#         echo ""
+#         echo "List root:"
+#         ls -la
+#         echo ""
+#         echo "Find csproj:"
+#         find . -name "*.csproj"
+#       displayName: 'DEBUG: locate csproj'
+
+#     # Install .NET SDK
+#     - task: UseDotNet@2
+#       displayName: 'Install .NET SDK'
+#       inputs:
+#         packageType: 'sdk'
+#         version: '9.x'
+
+#     # Restore
+#     - task: DotNetCoreCLI@2
+#       displayName: 'Restore packages'
+#       inputs:
+#         command: 'restore'
+#         projects: '$(projectFile)'
+
+#     # Build
+#     - task: DotNetCoreCLI@2
+#       displayName: 'Build project'
+#       inputs:
+#         command: 'build'
+#         projects: '$(projectFile)'  
+#         arguments: '--configuration $(buildConfiguration)'
+
+#     # Publish (ZIP)
+
+#     - task: DotNetCoreCLI@2
+#       displayName: 'Publish project ( single zip)'
+#       inputs:
+#         command: 'publish'
+#         projects: '$(projectFile)'
+#         publishWebProjects: false
+#         arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/publish'
+#         zipAfterPublish: false
+
+#     - script: |
+#         set -e
+#         echo "===== DEBUG: publish output ====="
+#         ls -la "$(Build.ArtifactStagingDirectory)/publish"
+#         test -f "$(Build.ArtifactStagingDirectory)/publish/BookShelf.Api.dll"
+#         test -f "$(Build.ArtifactStagingDirectory)/publish/BookShelf.Api.runtimeconfig.json"
+#         test -f "$(Build.ArtifactStagingDirectory)/publish/BookShelf.Api.deps.json"
+#       displayName: 'DEBUG: verify published API files'
+
+    
+# # Archive publish folder -> app.zip
+#     - task: ArchiveFiles@2
+#       displayName: 'Archive publish folder'
+#       inputs:
+#        rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/publish'
+#        includeRootFolder: false
+#        archiveType: 'zip'
+#        archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+#        replaceExistingArchive: true
+
+
+#     # Debug: confirm zip exists
+#     - script: |
+#         echo "===== DEBUG: artifact staging ====="
+#         ls -la "$(Build.ArtifactStagingDirectory)"
+#         echo ""
+#         echo "Find ZIPs:"
+#         find "$(Build.ArtifactStagingDirectory)" -maxdepth 2 -name "*.zip" -print
+#       displayName: 'DEBUG: verify zip output'
+
+#     # Publish artifact for next stages
+#     - task: PublishBuildArtifacts@1
+#       displayName: 'Publish build artifact'
+#       inputs:
+#         pathToPublish: '$(Build.ArtifactStagingDirectory)'
+#         artifactName: '$(artifactName)'
