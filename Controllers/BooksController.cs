@@ -19,24 +19,25 @@ public class BooksController(
     FileStorageService fileStorageService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<BookDto>>> GetBooks()
+    public async Task<ActionResult<IEnumerable<BookDto>>> GetBooks(CancellationToken cancellationToken)
     {
         var books = await dbContext.Books
             .Include(book => book.UploadedBy)
             .OrderByDescending(book => book.CreatedAtUtc)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
-        return Ok(books.Select(MapBook));
+        var mappedBooks = await Task.WhenAll(books.Select(book => MapBookAsync(book, cancellationToken)));
+        return Ok(mappedBooks);
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<BookDto>> GetBook(Guid id)
+    public async Task<ActionResult<BookDto>> GetBook(Guid id, CancellationToken cancellationToken)
     {
         var book = await dbContext.Books
             .Include(item => item.UploadedBy)
-            .FirstOrDefaultAsync(item => item.Id == id);
+            .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
 
-        return book is null ? NotFound() : Ok(MapBook(book));
+        return book is null ? NotFound() : Ok(await MapBookAsync(book, cancellationToken));
     }
 
     [HttpPost]
@@ -73,7 +74,7 @@ public class BooksController(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         book.UploadedBy = user;
-        return CreatedAtAction(nameof(GetBook), new { id = book.Id }, MapBook(book));
+        return CreatedAtAction(nameof(GetBook), new { id = book.Id }, await MapBookAsync(book, cancellationToken));
     }
 
     [HttpPut("{id:guid}")]
@@ -125,7 +126,7 @@ public class BooksController(
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
-        return Ok(MapBook(book));
+        return Ok(await MapBookAsync(book, cancellationToken));
     }
 
     [HttpDelete("{id:guid}")]
@@ -167,15 +168,15 @@ public class BooksController(
         return book.UploadedById == user.Id || await userManager.IsInRoleAsync(user, "Admin");
     }
 
-    private static BookDto MapBook(Book book) => new(
+    private async Task<BookDto> MapBookAsync(Book book, CancellationToken cancellationToken) => new(
         book.Id,
         book.Title,
         book.Author,
         book.Description,
         book.Category,
         book.PublishedOn,
-        book.PdfFilePath,
-        book.AudioFilePath,
+        await fileStorageService.GetReadUrlAsync(book.PdfFilePath, cancellationToken),
+        await fileStorageService.GetReadUrlAsync(book.AudioFilePath, cancellationToken),
         book.CreatedAtUtc,
         book.UpdatedAtUtc,
         book.UploadedById,

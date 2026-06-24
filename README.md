@@ -28,6 +28,8 @@ Uploaded PDFs and audio files are stored in Azure Blob Storage. Configure:
 - `AzureStorage__ConnectionString`
 - `AzureStorage__ContainerName` (default: `uploads`)
 
+The API prefers `AzureStorage__ConnectionString` for upload, delete, and generating signed read URLs for private blobs. If no connection string is provided, it falls back to `AzureStorage__AccountName` with `DefaultAzureCredential`.
+
 # Build
 
 Run:
