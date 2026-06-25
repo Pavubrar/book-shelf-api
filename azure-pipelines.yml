@@ -13,7 +13,7 @@ variables:
   buildConfiguration: 'Release'
   projectFile: './BookShelf.Api.csproj'
   artifactName: 'drop'
-  azureSubscription: 'ME-MngEnvMCAP517100-v-parvkaur-1 (f1c89731-86b0-4cd4-bd2d-f2347c1d62d2)'
+  azureSubscription: 'Book-App-Connection'
   appName: 'book-api'
   resourceGroupName: 'DevOps'
   slotName: 'staging'          
