@@ -2,6 +2,9 @@ bin/
 obj/
 wwwroot/uploads/
 *.db
+*.db-*
+*.err
+*.log
 *.user
 *.suo
 *.cache

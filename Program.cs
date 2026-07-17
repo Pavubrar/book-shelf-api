@@ -8,13 +8,24 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
+var webRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
+Directory.CreateDirectory(webRootPath);
+builder.WebHost.UseWebRoot(webRootPath);
 
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                       ?? throw new InvalidOperationException("DefaultConnection is missing.");
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    options.UseSqlServer(connectionString, sqlServerOptions =>
+    {
+        sqlServerOptions.EnableRetryOnFailure();
+    });
+});
 
 builder.Services
     .AddIdentityCore<AppUser>(options =>
@@ -80,7 +91,23 @@ if (!string.IsNullOrWhiteSpace(facebookAppId) && !string.IsNullOrWhiteSpace(face
     });
 }
 
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+static IEnumerable<string> SplitOrigins(params string?[] values) =>
+    values
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .SelectMany(value => value!.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+var configuredOriginsCsv = builder.Configuration["Cors:AllowedOriginsCsv"];
+var configuredOriginsValue = builder.Configuration["Cors:AllowedOrigins"];
+var frontendBaseUrl = builder.Configuration["Frontend:BaseUrl"];
+var allowedOrigins = configuredOrigins
+    .Concat(SplitOrigins(configuredOriginsCsv, configuredOriginsValue))
+    .Concat(SplitOrigins(frontendBaseUrl))
+    .Where(origin => !string.IsNullOrWhiteSpace(origin))
+    .Select(origin => origin!.TrimEnd('/'))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
@@ -102,6 +129,28 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+var healthEndpoint = async Task<IResult> (ApplicationDbContext dbContext) =>
+{
+    var databaseOnline = await dbContext.Database.CanConnectAsync();
+    var payload = new HealthResponse(
+        databaseOnline ? "healthy" : "degraded",
+        "BookShelf.Api",
+        DateTime.UtcNow,
+        new HealthChecks(
+            new HealthCheckResult("healthy"),
+            new HealthCheckResult(databaseOnline ? "healthy" : "unreachable")
+        )
+    );
+
+    return Results.Json(
+        payload,
+        statusCode: databaseOnline ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable
+    );
+};
+
+app.MapGet("/health", healthEndpoint);
+app.MapGet("/api/health", healthEndpoint);
+
 app.UseHttpsRedirection();
 app.UseCors("Frontend");
 app.UseStaticFiles();
@@ -113,8 +162,22 @@ using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     var dbContext = services.GetRequiredService<ApplicationDbContext>();
-    await dbContext.Database.EnsureCreatedAsync();
+    await dbContext.Database.MigrateAsync();
     await SeedData.InitializeAsync(services, builder.Configuration);
 }
 
 app.Run();
+
+internal sealed record HealthResponse(
+    string Status,
+    string Service,
+    DateTime TimestampUtc,
+    HealthChecks Checks
+);
+
+internal sealed record HealthChecks(
+    HealthCheckResult Api,
+    HealthCheckResult Database
+);
+
+internal sealed record HealthCheckResult(string Status);

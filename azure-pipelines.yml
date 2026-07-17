@@ -11,14 +11,23 @@ pool:
 
 variables:
   buildConfiguration: 'Release'
-  azureSubscription: 'ME-MngEnvMCAP517100-v-parvkaur-1 (f1c89731-86b0-4cd4-bd2d-f2347c1d62d2)'
+  projectFile: './BookShelf.Api.csproj'
+  artifactName: 'drop'
+  azureSubscription: 'Book-App-Connection'
   appName: 'book-api'
   resourceGroupName: 'DevOps'
   slotName: 'staging'          
   runtimeStack: 'DOTNETCORE|9.0'
+  keyVaultName: '<book-api-key-vault-name>'
+  sqlConnectionSecretName: '<azure-sql-connection-secret-name>'
+  storageConnectionSecretName: '<azure-storage-connection-secret-name>'
   canarySlotPercent: '5'
   canarySlotPercent2: '25'
   stagingUrl: 'book-api-staging-bgfda3bxcfgsbpdx.canadacentral-01.azurewebsites.net'
+  frontendBaseUrl: 'https://bookui-dzamgjbcd4a6dzbk.canadacentral-01.azurewebsites.net'
+  frontendCallbackPath: '/auth/external-callback'
+  corsAllowedOriginsCsv: 'https://bookui-dzamgjbcd4a6dzbk.canadacentral-01.azurewebsites.net,http://localhost:5173,http://127.0.0.1:5173'
+  azureStorageContainerName: 'uploads'
 
 
 stages:
@@ -64,14 +73,14 @@ stages:
       displayName: 'Restore packages'
       inputs:
         command: 'restore'
-        projects: '**/*.csproj'
+        projects: '$(projectFile)'
 
     # Build
     - task: DotNetCoreCLI@2
       displayName: 'Build project'
       inputs:
         command: 'build'
-        projects: '**/*.csproj'
+        projects: '$(projectFile)'  
         arguments: '--configuration $(buildConfiguration)'
 
     # Publish (ZIP)
@@ -80,9 +89,19 @@ stages:
       displayName: 'Publish project ( single zip)'
       inputs:
         command: 'publish'
+        projects: '$(projectFile)'
         publishWebProjects: false
         arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/publish'
         zipAfterPublish: false
+
+    - script: |
+        set -e
+        echo "===== DEBUG: publish output ====="
+        ls -la "$(Build.ArtifactStagingDirectory)/publish"
+        test -f "$(Build.ArtifactStagingDirectory)/publish/BookShelf.Api.dll"
+        test -f "$(Build.ArtifactStagingDirectory)/publish/BookShelf.Api.runtimeconfig.json"
+        test -f "$(Build.ArtifactStagingDirectory)/publish/BookShelf.Api.deps.json"
+      displayName: 'DEBUG: verify published API files'
 
     
 # Archive publish folder -> app.zip
@@ -154,6 +173,60 @@ stages:
               runtimeStack: '$(runtimeStack)'
               canarySlotPercent: '5'
               canarySlotPercent2: '25'   # or '50'
+
+          - task: AzureCLI@2
+            displayName: 'Enable managed identity for staging slot'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+                az webapp identity assign \
+                  --resource-group "$(resourceGroupName)" \
+                  --name "$(appName)" \
+                  --slot "$(slotName)"
+
+          - task: AzureAppServiceSettings@1
+            displayName: 'Apply staging app settings and Key Vault references'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appName: '$(appName)'
+              resourceGroupName: '$(resourceGroupName)'
+              slotName: '$(slotName)'
+              appSettings: |
+                [
+                  {
+                    "name": "Frontend__BaseUrl",
+                    "value": "$(frontendBaseUrl)",
+                    "slotSetting": false
+                  },
+                  {
+                    "name": "ConnectionStrings__DefaultConnection",
+                    "value": "@Microsoft.KeyVault(VaultName=$(keyVaultName);SecretName=$(sqlConnectionSecretName))",
+                    "slotSetting": true
+                  },
+                  {
+                    "name": "AzureStorage__ConnectionString",
+                    "value": "@Microsoft.KeyVault(VaultName=$(keyVaultName);SecretName=$(storageConnectionSecretName))",
+                    "slotSetting": true
+                  },
+                  {
+                    "name": "Frontend__ExternalCallbackPath",
+                    "value": "$(frontendCallbackPath)",
+                    "slotSetting": false
+                  },
+                  {
+                    "name": "AzureStorage__ContainerName",
+                    "value": "$(azureStorageContainerName)",
+                    "slotSetting": false
+                  },
+                  {
+                    "name": "Cors__AllowedOriginsCsv",
+                    "value": "$(corsAllowedOriginsCsv)",
+                    "slotSetting": false
+                  }
+                ]
 
 #==== Stage 3 for ditributing traffic to stagging slot for testing purpose for new features
 - stage: Canary_5
@@ -272,7 +345,7 @@ stages:
     steps:
     - script: |
         set -e
-        HEALTH_URL="https://book-api-bxazhse2f4e2hvbj.canadacentral-01.azurewebsites.net"
+        HEALTH_URL="https://book-api-staging-bgfda3bxcfgsbpdx.canadacentral-01.azurewebsites.net/health"
         MAX_RETRIES=12
         WAIT_SECONDS=10
 
