@@ -7,10 +7,12 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
-var builder = WebApplication.CreateBuilder(args);
-var webRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
-Directory.CreateDirectory(webRootPath);
-builder.WebHost.UseWebRoot(webRootPath);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    WebRootPath = "wwwroot"
+});
+
+Directory.CreateDirectory("wwwroot");
 
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
