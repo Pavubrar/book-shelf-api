@@ -160,10 +160,26 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+// using (var scope = app.Services.CreateScope())
+// {
+//     var services = scope.ServiceProvider;
+//     var dbContext = services.GetRequiredService<ApplicationDbContext>();
+//     // await dbContext.Database.MigrateAsync();
+//     // await SeedData.InitializeAsync(services, builder.Configuration);
+// }
+
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     var dbContext = services.GetRequiredService<ApplicationDbContext>();
+
+    var resetDatabaseOnStart = builder.Configuration.GetValue<bool>("Database:ResetOnStart");
+
+    if (resetDatabaseOnStart)
+    {
+        await dbContext.Database.EnsureDeletedAsync();
+    }
+
     await dbContext.Database.MigrateAsync();
     await SeedData.InitializeAsync(services, builder.Configuration);
 }

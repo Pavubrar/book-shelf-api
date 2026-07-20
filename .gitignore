@@ -10,3 +10,5 @@ wwwroot/uploads/
 *.cache
 *.pdb
 .vs/
+.env
+
