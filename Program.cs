@@ -131,23 +131,64 @@ if (app.Environment.IsDevelopment())
 
 var healthEndpoint = async Task<IResult> (ApplicationDbContext dbContext) =>
 {
-    var databaseOnline = await dbContext.Database.CanConnectAsync();
-    var payload = new HealthResponse(
-        databaseOnline ? "healthy" : "degraded",
-        "BookShelf.Api",
-        DateTime.UtcNow,
-        new HealthChecks(
-            new HealthCheckResult("healthy"),
-            new HealthCheckResult(databaseOnline ? "healthy" : "unreachable")
-        )
-    );
+    try
+    {
+        var databaseOnline = await dbContext.Database.CanConnectAsync();
 
-    return Results.Json(
-        payload,
-        statusCode: databaseOnline ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable
-    );
+        Console.WriteLine($"Database connectivity result: {databaseOnline}");
+
+        var payload = new HealthResponse(
+            databaseOnline ? "healthy" : "degraded",
+            "BookShelf.Api",
+            DateTime.UtcNow,
+            new HealthChecks(
+                new HealthCheckResult("healthy"),
+                new HealthCheckResult(databaseOnline ? "healthy" : "unreachable")
+            )
+        );
+
+        return Results.Json(
+            payload,
+            statusCode: databaseOnline ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable
+        );
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"SQL Exception: {ex}");
+
+        return Results.Json(
+            new
+            {
+                status = "degraded",
+                service = "BookShelf.Api",
+                error = ex.Message,
+                exceptionType = ex.GetType().Name
+            },
+            statusCode: StatusCodes.Status503ServiceUnavailable
+        );
+    }
 };
+app.MapGet("/dbtest", async (ApplicationDbContext dbContext) =>
+{
+    try
+    {
+        await dbContext.Database.OpenConnectionAsync();
 
+        return Results.Ok(new
+        {
+            status = "success"
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new
+        {
+            exceptionType = ex.GetType().FullName,
+            message = ex.Message,
+            innerException = ex.InnerException?.Message
+        });
+    }
+});
 app.MapGet("/health", healthEndpoint);
 app.MapGet("/api/health", healthEndpoint);
 
