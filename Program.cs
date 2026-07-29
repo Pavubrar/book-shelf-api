@@ -192,6 +192,10 @@ app.MapGet("/dbtest", async (ApplicationDbContext dbContext) =>
 });
 app.MapGet("/health", healthEndpoint);
 app.MapGet("/api/health", healthEndpoint);
+app.MapMethods("/options-test", new[] { "OPTIONS" }, () =>
+{
+    return Results.Ok("OPTIONS works");
+});
 
 // app.UseHttpsRedirection();
 app.UseCors("Frontend");
