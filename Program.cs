@@ -193,7 +193,7 @@ app.MapGet("/dbtest", async (ApplicationDbContext dbContext) =>
 app.MapGet("/health", healthEndpoint);
 app.MapGet("/api/health", healthEndpoint);
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 app.UseCors("Frontend");
 app.UseStaticFiles();
 app.UseAuthentication();
