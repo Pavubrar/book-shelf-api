@@ -57,6 +57,7 @@ stages:
       displayName: Install EF Tool
 
     - script: |
+        echo "Connection string variable exists"
         dotnet restore BookShelf.Api.csproj
         dotnet ef database update \
           --project BookShelf.Api.csproj \
