@@ -53,11 +53,14 @@ stages:
 
     - script: |
         dotnet tool install --global dotnet-ef
+        export PATH="$PATH:$HOME/.dotnet/tools"
       displayName: Install EF Tool
 
     - script: |
-        dotnet restore
-        dotnet ef database update
+        dotnet restore BookShelf.Api.csproj
+        dotnet ef database update \
+          --project BookShelf.Api.csproj \
+          --startup-project BookShelf.Api.csproj
       displayName: Apply Database Migrations
       env:
         ConnectionStrings__DefaultConnection: $(sqlConnectionString)
