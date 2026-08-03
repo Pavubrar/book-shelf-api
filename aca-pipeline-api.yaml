@@ -22,15 +22,15 @@ stages:
 
     steps:
 
-    - task: Docker@2
-      displayName: Build and Push API Image
-      inputs:
-        command: buildAndPush
-        repository: bookshelf-api
-        dockerfile: 'Dockerfile'
-        containerRegistry: 'sc-acr-bookshelf'
-        tags: |
-          latest
+      - task: Docker@2
+        displayName: Build and Push Web Image
+        inputs:
+          command: buildAndPush
+          repository: bookshelf-api
+          dockerfile: 'Dockerfile'
+          containerRegistry: 'vn-sc-acr-bookshelf'
+          tags: |
+            latest
 
 # ==========================
 # Run Migrations
