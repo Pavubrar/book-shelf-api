@@ -4,7 +4,7 @@ trigger:
       - docker-container-testing
 
 variables:
-- group: bookshelf-api-secrets
+- group: bookshelf-api-secrets-aca
 
 pool:
   vmImage: ubuntu-latest
