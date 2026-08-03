@@ -3,46 +3,87 @@ trigger:
     include:
       - docker-container-testing
 
+variables:
+- group: bookshelf-api-secrets
+
 pool:
   vmImage: ubuntu-latest
+
 stages:
+
+# ==========================
+# Build & Push Image
+# ==========================
 - stage: Build
   displayName: Build and Push Image
 
-  jobs: 
+  jobs:
   - job: Build
 
     steps:
 
-      - task: Docker@2
-        displayName: Build and Push Web Image
-        inputs:
-          command: buildAndPush
-          repository: bookshelf-api
-          dockerfile: 'Dockerfile'
-          containerRegistry: 'sc-acr-bookshelf'
-          tags: |
-            latest
+    - task: Docker@2
+      displayName: Build and Push API Image
+      inputs:
+        command: buildAndPush
+        repository: bookshelf-api
+        dockerfile: 'Dockerfile'
+        containerRegistry: 'sc-acr-bookshelf'
+        tags: |
+          latest
 
-- stage: Deploy 
-  displayName: Deploy to ACA 
-  dependsOn: Build 
+# ==========================
+# Run Migrations
+# ==========================
+- stage: Migrate
+  displayName: Run Database Migration
+
+  dependsOn: Build
 
   jobs:
-  - job: Deploy 
+  - job: Migrate
 
     steps:
-      - task: AzureCLI@2
-        displayName: Deplo Web ACA 
 
-        inputs: 
-          azureSubscription: 'Book-App-Connection'
-          scriptType: pscore
+    - task: UseDotNet@2
+      displayName: Install .NET SDK
+      inputs:
+        packageType: sdk
+        version: '9.x'
 
-          scriptLocation: inlineScript
+    - script: |
+        dotnet tool install --global dotnet-ef
+      displayName: Install EF Tool
 
-          inlineScript: |
-            az containerapp update `
+    - script: |
+        dotnet restore
+        dotnet ef database update
+      displayName: Apply Database Migrations
+      env:
+        ConnectionStrings__DefaultConnection: $(sqlConnectionString)
+# ==========================
+# Deploy ACA
+# ==========================
+- stage: Deploy
+  displayName: Deploy to ACA
+
+  dependsOn: Migrate
+
+  jobs:
+  - job: Deploy
+
+    steps:
+
+    - task: AzureCLI@2
+      displayName: Deploy API ACA
+
+      inputs:
+        azureSubscription: 'Book-App-Connection'
+        scriptType: pscore
+        scriptLocation: inlineScript
+
+        inlineScript: |
+          az containerapp update `
             --name bookshelf-api-app `
             --resource-group rg-bookshelf-aca-dev `
             --image bookshelfacr2026.azurecr.io/bookshelf-api:latest

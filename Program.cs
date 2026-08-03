@@ -149,7 +149,7 @@ var healthEndpoint = async Task<IResult> (ApplicationDbContext dbContext) =>
         statusCode: databaseOnline ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable
     );
 };
-
+app.MapGet("/live", () => Results.Ok("alive"));
 app.MapGet("/health", healthEndpoint);
 app.MapGet("/api/health", healthEndpoint);
 
@@ -160,6 +160,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+
+// ======= reduce cold strts by commentiong out sql migrationd during startup==.
 // using (var scope = app.Services.CreateScope())
 // {
 //     var services = scope.ServiceProvider;
@@ -168,22 +170,33 @@ app.MapControllers();
 //     // await SeedData.InitializeAsync(services, builder.Configuration);
 // }
 
-using (var scope = app.Services.CreateScope())
+// using (var scope = app.Services.CreateScope())
+// {
+//     var services = scope.ServiceProvider;
+//     var dbContext = services.GetRequiredService<ApplicationDbContext>();
+
+//     var resetDatabaseOnStart = builder.Configuration.GetValue<bool>("Database:ResetOnStart");
+
+//     if (resetDatabaseOnStart)
+//     {
+//         await dbContext.Database.EnsureDeletedAsync();
+//     }
+
+//     await dbContext.Database.MigrateAsync();
+//     await SeedData.InitializeAsync(services, builder.Configuration);
+// }
+
+
+
+if (builder.Configuration.GetValue<bool>("RunMigrations"))
 {
+    using var scope = app.Services.CreateScope();
+
     var services = scope.ServiceProvider;
     var dbContext = services.GetRequiredService<ApplicationDbContext>();
 
-    var resetDatabaseOnStart = builder.Configuration.GetValue<bool>("Database:ResetOnStart");
-
-    if (resetDatabaseOnStart)
-    {
-        await dbContext.Database.EnsureDeletedAsync();
-    }
-
     await dbContext.Database.MigrateAsync();
-    await SeedData.InitializeAsync(services, builder.Configuration);
 }
-
 app.Run();
 
 internal sealed record HealthResponse(
