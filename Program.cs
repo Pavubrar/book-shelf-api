@@ -176,17 +176,6 @@ if (runMigrations)
         builder.Configuration);
 }
 
-
-
-// if (builder.Configuration.GetValue<bool>("RunMigrations"))
-// {
-//     using var scope = app.Services.CreateScope();
-
-//     var services = scope.ServiceProvider;
-//     var dbContext = services.GetRequiredService<ApplicationDbContext>();
-
-//     await dbContext.Database.MigrateAsync();
-// }
 app.Run();
 
 internal sealed record HealthResponse(
