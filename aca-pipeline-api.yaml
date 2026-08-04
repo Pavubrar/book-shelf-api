@@ -31,6 +31,7 @@ stages:
           containerRegistry: 'vn-sc-acr-bookshelf'
           tags: |
             latest
+            $(Build.BuildId)
 
 # ==========================
 # Run Migrations
@@ -90,4 +91,4 @@ stages:
           az containerapp update `
             --name bookshelf-api-app `
             --resource-group rg-bookshelf-aca-dev `
-            --image bookshelfacr2026.azurecr.io/bookshelf-api:latest
+            --image bookshelfacr2026.azurecr.io/bookshelf-api:$(Build.BuildId)
