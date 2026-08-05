@@ -58,6 +58,9 @@ stages:
       displayName: Install EF Tool
 
     - script: |
+        echo "Value starts with:"
+
+        echo "$ConnectionStrings__DefaultConnection"
         echo "$ConnectionStrings__DefaultConnection" | cut -c1-40
         echo "Connection string loaded successfully"
         echo "Length: ${#ConnectionStrings__DefaultConnection}"
