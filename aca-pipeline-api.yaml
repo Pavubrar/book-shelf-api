@@ -70,7 +70,7 @@ stages:
           --startup-project BookShelf.Api.csproj
       displayName: Test Variables
       env:
-        ConnectionStrings__DefaultConnection: $(sqlConnectionString)
+        ConnectionStrings__DefaultConnection: 'Server=tcp:bookshelf.database.windows.net,1433;Initial Catalog=free-sql-db-3528898;Persist Security Info=False;User ID=YOUR_USER;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;'
 # ==========================
 # Deploy ACA
 # ==========================
