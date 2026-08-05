@@ -58,7 +58,9 @@ stages:
       displayName: Install EF Tool
 
     - script: |
+        echo "$ConnectionStrings__DefaultConnection" | cut -c1-40
         echo "Connection string loaded successfully"
+        echo "Length: ${#ConnectionStrings__DefaultConnection}"
         dotnet restore BookShelf.Api.csproj
         dotnet ef database update \
           --project BookShelf.Api.csproj \
