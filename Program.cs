@@ -162,20 +162,45 @@ app.UseAuthorization();
 app.MapControllers();
 
 
+// var runMigrations = builder.Configuration.GetValue<bool>    ("RunMigrations");  #####=====replacing this caa_job fpr migration
+
+// if (runMigrations)
+// {
+//     using var scope = app.Services.CreateScope();
+
+//     var services = scope.ServiceProvider;
+//     var dbContext = services.GetRequiredService<ApplicationDbContext>();
+
+//     await dbContext.Database.MigrateAsync();
+//     await SeedData.InitializeAsync(
+//         services,
+//         builder.Configuration);
+// }
+
 var runMigrations = builder.Configuration.GetValue<bool>("RunMigrations");
 
 if (runMigrations)
 {
+    app.Logger.LogInformation("Migration mode enabled.");
+
     using var scope = app.Services.CreateScope();
 
     var services = scope.ServiceProvider;
-    var dbContext = services.GetRequiredService<ApplicationDbContext>();
 
+    var dbContext =
+        services.GetRequiredService<ApplicationDbContext>();
+    app.Logger.LogInformation("Starting database migration...");
     await dbContext.Database.MigrateAsync();
+
     await SeedData.InitializeAsync(
         services,
         builder.Configuration);
+
+    app.Logger.LogInformation("Migration completed.");
+
+    return;
 }
+
 
 app.Run();
 

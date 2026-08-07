@@ -34,43 +34,31 @@ stages:
             $(Build.BuildId)
 
 # ==========================
-# Run Migrations
+# Run ACA Migration Job
 # ==========================
 - stage: Migrate
-  displayName: Run Database Migration
+  displayName: Run ACA Migration Job
 
   dependsOn: Build
 
   jobs:
-  - job: Migrate
+  - job: RunMigration
 
     steps:
 
-    - task: UseDotNet@2
-      displayName: Install .NET SDK
+    - task: AzureCLI@2
+      displayName: Start Migration Job
+
       inputs:
-        packageType: sdk
-        version: '9.x'
+        azureSubscription: 'Book-App-Connection'
+        scriptType: pscore
+        scriptLocation: inlineScript
 
-    - script: |
-        dotnet tool install --global dotnet-ef
-        export PATH="$PATH:$HOME/.dotnet/tools"
-      displayName: Install EF Tool
+        inlineScript: |
 
-    - script: |
-        echo "Value starts with:"
-
-        echo "$ConnectionStrings__DefaultConnection"
-        echo "$ConnectionStrings__DefaultConnection" | cut -c1-40
-        echo "Connection string loaded successfully"
-        echo "Length: ${#ConnectionStrings__DefaultConnection}"
-        dotnet restore BookShelf.Api.csproj
-        dotnet ef database update \
-          --project BookShelf.Api.csproj \
-          --startup-project BookShelf.Api.csproj
-      displayName: Test Variables
-      env:
-        ConnectionStrings__DefaultConnection: 'Server=tcp:bookshelf.database.windows.net,1433;Initial Catalog=free-sql-db-3528898;Persist Security Info=False;User ID=YOUR_USER;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;'
+          az containerapp job start `
+            --name bookshelf-db-migration `
+            --resource-group rg-bookshelf-aca-dev
 # ==========================
 # Deploy ACA
 # ==========================
