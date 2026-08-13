@@ -40,22 +40,31 @@ public class AuthController(
     [AllowAnonymous]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
     {
-        var user = new AppUser
-        {
-            UserName = request.Email,
-            Email = request.Email,
-            DisplayName = request.DisplayName,
-            EmailConfirmed = true
-        };
 
-        var result = await userManager.CreateAsync(user, request.Password);
-        if (!result.Succeeded)
+        try
         {
-            return BadRequest(result.Errors.Select(error => error.Description));
+
+            var user = new AppUser
+            {
+                UserName = request.Email,
+                Email = request.Email,
+                DisplayName = request.DisplayName,
+                EmailConfirmed = true
+            };
+
+            var result = await userManager.CreateAsync(user, request.Password);
+            if (!result.Succeeded)
+            {
+                return BadRequest(result.Errors.Select(error => error.Description));
+            }
+
+            await userManager.AddToRoleAsync(user, "User");
+            return Ok(await tokenService.CreateTokenAsync(user));
         }
-
-        await userManager.AddToRoleAsync(user, "User");
-        return Ok(await tokenService.CreateTokenAsync(user));
+    catch(Exception ex)
+    {
+        return StatusCode(500, ex.ToString());
+    }
     }
 
     [HttpPost("login")]
