@@ -166,18 +166,18 @@ app.MapGet("/health/db", async (ApplicationDbContext dbContext) =>
 {
     try
     {
-        var databaseOnline =
-            await dbContext.Database.CanConnectAsync();
+        await dbContext.Database.OpenConnectionAsync();
 
-        return Results.Json(
-            new
-            {
-                status = databaseOnline ? "healthy" : "unhealthy",
-                database = databaseOnline ? "reachable" : "unreachable",
-                timestampUtc = DateTime.UtcNow
-            },
-            statusCode: databaseOnline ? 200 : 503
-        );
+        var connection = dbContext.Database.GetDbConnection();
+
+        return Results.Ok(new
+        {
+            status = "healthy",
+            database = "reachable",
+            server = connection.DataSource,
+            databaseName = connection.Database,
+            timestampUtc = DateTime.UtcNow
+        });
     }
     catch (Exception ex)
     {
@@ -185,9 +185,9 @@ app.MapGet("/health/db", async (ApplicationDbContext dbContext) =>
             new
             {
                 status = "error",
+                exceptionType = ex.GetType().FullName,
                 message = ex.Message,
                 innerException = ex.InnerException?.Message,
-                
                 timestampUtc = DateTime.UtcNow
             },
             statusCode: 500
