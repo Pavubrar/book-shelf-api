@@ -131,28 +131,89 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-var healthEndpoint = async Task<IResult> (ApplicationDbContext dbContext) =>
-{
-    //  var databaseOnline = await dbContext.Database.CanConnectAsync();
-     var databaseOnline = true;
-    var payload = new HealthResponse(
-        databaseOnline ? "healthy" : "degraded",
-        "BookShelf.Api",
-        DateTime.UtcNow,
-        new HealthChecks(
-            new HealthCheckResult("healthy"),
-            new HealthCheckResult(databaseOnline ? "healthy" : "unreachable")
-        )
-    );
+// var healthEndpoint = async Task<IResult> (ApplicationDbContext dbContext) =>
+// {
+    
+//     //  var databaseOnline = await dbContext.Database.CanConnectAsync();
+//     var databaseOnline = true;
+//     var payload = new HealthResponse(
+//         databaseOnline ? "healthy" : "degraded",
+//         "BookShelf.Api",
+//         DateTime.UtcNow,
+//         new HealthChecks(
+//             new HealthCheckResult("healthy"),
+//             new HealthCheckResult(databaseOnline ? "healthy" : "unreachable")
+//         )
+//     );
 
-    return Results.Json(
-        payload,
-        statusCode: databaseOnline ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable
-    );
-};
+//     return Results.Json(
+//         payload,
+//         statusCode: databaseOnline ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable
+//     );
+// };
 app.MapGet("/live", () => Results.Ok("alive"));
-app.MapGet("/health", healthEndpoint);
-app.MapGet("/api/health", healthEndpoint);
+
+app.MapGet("/health", () =>
+{
+    return Results.Json(new
+    {
+        status = "healthy",
+        service = "BookShelf.Api",
+        timestampUtc = DateTime.UtcNow
+    });
+});
+app.MapGet("/health/db", async (ApplicationDbContext dbContext) =>
+{
+    try
+    {
+        var databaseOnline =
+            await dbContext.Database.CanConnectAsync();
+
+        return Results.Json(
+            new
+            {
+                status = databaseOnline ? "healthy" : "unhealthy",
+                database = databaseOnline ? "reachable" : "unreachable",
+                timestampUtc = DateTime.UtcNow
+            },
+            statusCode: databaseOnline ? 200 : 503
+        );
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(
+            new
+            {
+                status = "error",
+                message = ex.Message,
+                timestampUtc = DateTime.UtcNow
+            },
+            statusCode: 500
+        );
+    }
+});
+app.MapGet("/health/db/details", async (
+    ApplicationDbContext dbContext) =>
+{
+    try
+    {
+        await dbContext.Database.OpenConnectionAsync();
+
+        return Results.Ok(new
+        {
+            status = "healthy",
+            server = dbContext.Database.GetDbConnection().DataSource,
+            database = dbContext.Database.GetDbConnection().Database
+        });
+    }
+    catch(Exception ex)
+    {
+        return Results.Problem(
+            title: "Database connection failed",
+            detail: ex.Message,
+            statusCode: 500);
+    }
+});
 
 app.UseHttpsRedirection();
 app.UseCors("Frontend");
