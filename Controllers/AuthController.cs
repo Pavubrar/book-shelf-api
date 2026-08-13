@@ -40,7 +40,7 @@ public class AuthController(
     [AllowAnonymous]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
     {
-
+    Console.WriteLine("REGISTER HIT");
         try
         {
 
@@ -71,6 +71,7 @@ public class AuthController(
     [AllowAnonymous]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
     {
+        Console.WriteLine("login HIT");
         var user = await userManager.FindByEmailAsync(request.Email);
         if (user is null || !await userManager.CheckPasswordAsync(user, request.Password))
         {
