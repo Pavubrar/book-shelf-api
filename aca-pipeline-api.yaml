@@ -57,7 +57,7 @@ stages:
         inlineScript: |
 
           az containerapp job start `
-            --name bookshelf-db-migration `
+            --name bookshelf-db-migration-v2 `
             --resource-group rg-bookshelf-aca-dev
 # ==========================
 # Deploy ACA
@@ -82,6 +82,6 @@ stages:
 
         inlineScript: |
           az containerapp update `
-            --name bookshelf-api-app `
+            --name bookshelf-api-app-v2 `
             --resource-group rg-bookshelf-aca-dev `
             --image bookshelfacr2026.azurecr.io/bookshelf-api:$(Build.BuildId)
