@@ -187,7 +187,8 @@ app.MapGet("/health/db", async (ApplicationDbContext dbContext) =>
                 status = "error",
                 exceptionType = ex.GetType().FullName,
                 message = ex.Message,
-                innerException = ex.InnerException?.Message,
+                innerException = ex.InnerException?.ToString(),
+                stack =ex.StackTrace,
                 timestampUtc = DateTime.UtcNow
             },
             statusCode: 500
