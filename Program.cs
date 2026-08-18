@@ -151,7 +151,7 @@ if (app.Environment.IsDevelopment())
 //         statusCode: databaseOnline ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable
 //     );
 // };
-// app.MapGet("/live", () => Results.Ok("alive"));
+ app.MapGet("/live", () => Results.Ok("alive"));
 
 app.MapGet("/health", () =>
 {
