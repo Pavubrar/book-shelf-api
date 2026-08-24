@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: bookshelf-api
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: bookshelf-api
+
+  template:
+    metadata:
+      labels:
+        app: bookshelf-api
+
+    spec:
+      containers:
+        - name: bookshelf-api
+          image: bookshelf-api:k8s
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: bookshelf-api-secret
+                  key: ConnectionStrings__DefaultConnection  
