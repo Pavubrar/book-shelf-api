@@ -20,6 +20,7 @@ spec:
       containers:
         - name: bookshelf-api
           image: bookshelf-api:k8s
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
           env:
