@@ -218,7 +218,7 @@ app.MapGet("/health/db/details", async (
     }
 });
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 app.UseCors("Frontend");
 app.UseStaticFiles();
 app.UseAuthentication();
