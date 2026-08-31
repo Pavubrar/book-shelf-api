@@ -3,6 +3,7 @@ kind: Deployment
 
 metadata:
   name: bookshelf-api
+  namespace: bookshelf
 
 spec:
   replicas: 1
@@ -26,8 +27,32 @@ spec:
           env:
             - name: ASPNETCORE_ENVIRONMENT
               value: "Development"
-            - name: ConnectionStrings__DefaultConnection
-              valueFrom:
-                secretKeyRef:
-                  name: bookshelf-api-secret
-                  key: ConnectionStrings__DefaultConnection  
+
+          envFrom:
+            - configMapRef:
+                name: bookshelf-api-config
+            - secretRef:
+                name: bookshelf-api-secret
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/db
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3 
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12     
