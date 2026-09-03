@@ -3,6 +3,7 @@ kind: Service
 
 metadata:
   name: bookshelf-api
+  azure.workload.identity/use: "true"
 
 spec:
   type: ClusterIP
